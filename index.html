@@ -1,72 +1,104 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="utf-8" />
-  <title>전국 약국 지도</title>
-  <style>
-    body {
-      font-family: sans-serif;
-      margin: 0;
-      padding: 0;
-    }
-    h2 {
-      text-align: center;
-      margin: 15px 0;
-    }
-    #map {
-      width: 100%;
-      height: 90vh;
-    }
-  </style>
-  <!-- ✅ 네이버 지도 JS API (아래에 본인 Client ID 입력) -->
-  <script src="https://openapi.map.naver.com/openapi/v3/maps.js?ncpClientId=a082by5b3w"></script>
+    <meta charset="UTF-8">
+    <title>상호 지도 표시</title>
+    <script type="text/javascript" src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=a082by5b3w&submodules=geocoder"></script>
+    <style>
+        #map { width: 100%; height: 600px; }
+    </style>
 </head>
 <body>
-  <h2>전국 약국 지도</h2>
-  <div id="map"></div>
+    <h1>상호 위치 지도</h1>
+    <div id="map"></div>
 
-  <script>
-    // 지도 기본 설정
-    const map = new naver.maps.Map('map', {
-      center: new naver.maps.LatLng(36.5, 127.9), // 대한민국 중심 근처
-      zoom: 7
-    });
-
-    // 약국 데이터 (실제 운영 시 Google Sheets나 DB에서 불러올 수 있음)
-    const pharmacies = [
-      { name: "미양온누리약국(서울강북)", address: "서울특별시 강북구 솔샘로 229-1" },
-      { name: "혁신제일약국(경남진주)", address: "경남 진주시 사들로 97" },
-      { name: "서울약국(대구북구)", address: "대구광역시 북구 학정로 436 1층" },
-    ];
-
-    // 주소 → 좌표 변환 후 지도에 마커 표시
-    pharmacies.forEach(pharmacy => {
-      naver.maps.Service.geocode({ query: pharmacy.address }, (status, response) => {
-        if (status !== naver.maps.Service.Status.OK) return;
-        const result = response.v2.addresses[0];
-        const position = new naver.maps.LatLng(result.y, result.x);
-
-        // 마커 생성
-        const marker = new naver.maps.Marker({
-          map: map,
-          position: position,
-          title: pharmacy.name
+    <script>
+        // 네이버 지도 초기화
+        let map = new naver.maps.Map('map', {
+            center: new naver.maps.LatLng(37.5665, 126.9780), // 서울 중심
+            zoom: 10
         });
 
-        // 클릭 시 정보창
-        const info = new naver.maps.InfoWindow({
-          content: `
-            <div style="padding:10px;min-width:200px;">
-              <b>${pharmacy.name}</b><br>
-              ${pharmacy.address}
-            </div>`
-        });
+        let markers = []; // 마커 배열 (업데이트 시 제거용)
 
-        naver.maps.Event.addListener(marker, "click", () => {
-          info.open(map, marker);
-        });
-      });
-    });
-  </script>
+        // Google Sheets JSON URL
+        const SHEET_ID = '{YOUR_SHEET_ID}';
+        const JSON_URL = `https://docs.google.com/spreadsheets/d/1Kn0c1XVHv7c9afU_2r722VgYmYY-oC1UpMOrPy4WJjo/gviz/tq?tqx=out:json&sheet=Sheet1`;
+
+        // 데이터 불러오기 및 지도 업데이트 함수
+        async function updateMap() {
+            try {
+                const response = await fetch(JSON_URL);
+                const text = await response.text();
+                // JSON 파싱 (Google의 gviz 형식에서 table.rows 추출)
+                const json = JSON.parse(text.substring(47, text.lastIndexOf(';')));
+                const rows = json.table.rows;
+
+                // 기존 마커 제거
+                markers.forEach(marker => marker.setMap(null));
+                markers = [];
+
+                // 각 행 처리 (헤더 스킵: rows[0]부터 데이터)
+                for (let i = 0; i < rows.length; i++) {
+                    const nameCell = rows[i].c[0]; // 상호명
+                    const addrCell = rows[i].c[1]; // 주소
+                    if (!nameCell || !addrCell) continue;
+
+                    const name = nameCell.v || '';
+                    const address = addrCell.v || '';
+
+                    // Geocoder로 주소 -> 좌표 변환
+                    naver.maps.Service.geocode({
+                        query: address
+                    }, function(status, response) {
+                        if (status !== naver.maps.Service.Status.OK) {
+                            console.error('Geocode error for ' + address);
+                            return;
+                        }
+
+                        const result = response.v2;
+                        if (result.addresses && result.addresses.length > 0) {
+                            const location = result.addresses[0];
+                            const position = new naver.maps.LatLng(location.y, location.x); // 위도, 경도
+
+                            // 마커 생성
+                            const marker = new naver.maps.Marker({
+                                position: position,
+                                map: map,
+                                title: name,
+                                icon: {
+                                    url: 'https://maps.naver.com/theme/dot/pin-default.png', // 기본 핀 아이콘
+                                    size: new naver.maps.Size(24, 37),
+                                    anchor: new naver.maps.Point(12, 37)
+                                }
+                            });
+
+                            // 클릭 시 정보창
+                            const infoWindow = new naver.maps.InfoWindow({
+                                content: `<div style="padding:5px;"><strong>${name}</strong><br>${address}</div>`
+                            });
+                            naver.maps.Event.addListener(marker, 'click', function(e) {
+                                if (infoWindow.getMap()) {
+                                    infoWindow.close();
+                                } else {
+                                    infoWindow.open(map, marker);
+                                }
+                            });
+
+                            markers.push(marker);
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Error fetching data:', error);
+            }
+        }
+
+        // 초기 로드
+        updateMap();
+
+        // 자동 업데이트: 1분마다 (필요 시 조정)
+        setInterval(updateMap, 60000); // 60초
+    </script>
 </body>
 </html>
