@@ -1,104 +1,13 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>상호 지도 표시</title>
-    <script type="text/javascript" src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=a082by5b3w&submodules=geocoder"></script>
-    <style>
-        #map { width: 100%; height: 600px; }
-    </style>
+    <title>테스트</title>
+    <script type="text/javascript" src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=YOUR_ID_HERE"></script>
 </head>
 <body>
-    <h1>상호 위치 지도</h1>
-    <div id="map"></div>
-
+    <div id="map" style="width:100%;height:400px;"></div>
     <script>
-        // 네이버 지도 초기화
-        let map = new naver.maps.Map('map', {
-            center: new naver.maps.LatLng(37.5665, 126.9780), // 서울 중심
-            zoom: 10
-        });
-
-        let markers = []; // 마커 배열 (업데이트 시 제거용)
-
-        // Google Sheets JSON URL
-        const SHEET_ID = '{YOUR_SHEET_ID}';
-        const JSON_URL = `https://docs.google.com/spreadsheets/d/1Kn0c1XVHv7c9afU_2r722VgYmYY-oC1UpMOrPy4WJjo/gviz/tq?tqx=out:json&sheet=Sheet1`;
-
-        // 데이터 불러오기 및 지도 업데이트 함수
-        async function updateMap() {
-            try {
-                const response = await fetch(JSON_URL);
-                const text = await response.text();
-                // JSON 파싱 (Google의 gviz 형식에서 table.rows 추출)
-                const json = JSON.parse(text.substring(47, text.lastIndexOf(';')));
-                const rows = json.table.rows;
-
-                // 기존 마커 제거
-                markers.forEach(marker => marker.setMap(null));
-                markers = [];
-
-                // 각 행 처리 (헤더 스킵: rows[0]부터 데이터)
-                for (let i = 0; i < rows.length; i++) {
-                    const nameCell = rows[i].c[0]; // 상호명
-                    const addrCell = rows[i].c[1]; // 주소
-                    if (!nameCell || !addrCell) continue;
-
-                    const name = nameCell.v || '';
-                    const address = addrCell.v || '';
-
-                    // Geocoder로 주소 -> 좌표 변환
-                    naver.maps.Service.geocode({
-                        query: address
-                    }, function(status, response) {
-                        if (status !== naver.maps.Service.Status.OK) {
-                            console.error('Geocode error for ' + address);
-                            return;
-                        }
-
-                        const result = response.v2;
-                        if (result.addresses && result.addresses.length > 0) {
-                            const location = result.addresses[0];
-                            const position = new naver.maps.LatLng(location.y, location.x); // 위도, 경도
-
-                            // 마커 생성
-                            const marker = new naver.maps.Marker({
-                                position: position,
-                                map: map,
-                                title: name,
-                                icon: {
-                                    url: 'https://maps.naver.com/theme/dot/pin-default.png', // 기본 핀 아이콘
-                                    size: new naver.maps.Size(24, 37),
-                                    anchor: new naver.maps.Point(12, 37)
-                                }
-                            });
-
-                            // 클릭 시 정보창
-                            const infoWindow = new naver.maps.InfoWindow({
-                                content: `<div style="padding:5px;"><strong>${name}</strong><br>${address}</div>`
-                            });
-                            naver.maps.Event.addListener(marker, 'click', function(e) {
-                                if (infoWindow.getMap()) {
-                                    infoWindow.close();
-                                } else {
-                                    infoWindow.open(map, marker);
-                                }
-                            });
-
-                            markers.push(marker);
-                        }
-                    });
-                }
-            } catch (error) {
-                console.error('Error fetching data:', error);
-            }
-        }
-
-        // 초기 로드
-        updateMap();
-
-        // 자동 업데이트: 1분마다 (필요 시 조정)
-        setInterval(updateMap, 60000); // 60초
+        var map = new naver.maps.Map('map', { center: new naver.maps.LatLng(37.5665, 126.9780), zoom: 10 });
     </script>
 </body>
 </html>
